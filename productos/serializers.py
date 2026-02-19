@@ -9,14 +9,9 @@ class CategoriaSerializer(serializers.ModelSerializer):
 
 
 class ProductoImagenSerializer(serializers.ModelSerializer):
-    url = serializers.SerializerMethodField()
-
     class Meta:
         model = ProductoImagen
-        fields = ["url"]
-
-    def get_url(self, obj):
-        return obj.imagen.url
+        fields = ["imagen_url"]
 
 
 class ProductoSerializer(serializers.ModelSerializer):
@@ -40,7 +35,7 @@ class ProductoSerializer(serializers.ModelSerializer):
         ]
 
     def get_imagenes(self, obj):
-        return [img.imagen.url for img in obj.imagenes.all()]
+        return [img.imagen_url for img in obj.imagenes.all()]
 
     def get_medidas(self, obj):
         return {
