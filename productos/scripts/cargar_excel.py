@@ -1,66 +1,105 @@
-import pandas as pd
+import os
+import sys
 from pathlib import Path
+import pandas as pd
 
+# =========================
+# BOOTSTRAP DJANGO
+# =========================
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+sys.path.append(str(BASE_DIR))
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")  # ⚠️ cambiá si tu settings se llaman distinto
+
+import django
+django.setup()
+
+# =========================
+# IMPORTS DJANGO
+# =========================
 from productos.models import Producto, Categoria, ProductoImagen
 
 
 def run():
-    # 1. Ruta absoluta a este archivo
-    base_dir = Path(__file__).resolve().parent
-    excel_path = base_dir / "productos.xlsx"
+    # =========================
+    # RUTA EXCEL
+    # =========================
+    excel_path = Path(__file__).resolve().parent / "productos.xlsx"
 
     if not excel_path.exists():
         print(f"❌ No se encontró el Excel en: {excel_path}")
         return
 
-    # 2. Leer Excel
+    # =========================
+    # LEER EXCEL
+    # =========================
     df = pd.read_excel(excel_path)
 
-    print("📄 Columnas detectadas:", list(df.columns))
-    print(f"📦 Filas encontradas: {len(df)}")
+    print("📄 Columnas:", list(df.columns))
+    print(f"📦 Filas: {len(df)}")
 
     for _, row in df.iterrows():
+        # =========================
+        # DATOS BÁSICOS
+        # =========================
+        producto_id = str(row["id"]).strip()
         nombre = str(row["nombre"]).strip()
+        slug = str(row.get("slug") or producto_id).strip()
+
         categoria_nombre = str(row["categoria"]).strip().lower()
-        precio = row["precio"]
+        precio = int(row["precio"])
 
         descripcion = row.get("descripcion", "")
-        largo = row.get("largo", "")
-        alto = row.get("alto", "")
-        profundidad = row.get("profundidad", "")
+        largo = row.get("largo", 0)
+        alto = row.get("alto", 0)
+        profundidad = row.get("profundidad", 0)
         peso = row.get("peso_kg", None)
         stock = bool(row.get("stock", True))
 
-        # 3. Categoría
+        # =========================
+        # CATEGORIA
+        # =========================
         categoria, _ = Categoria.objects.get_or_create(
-            nombre=categoria_nombre,
-            defaults={"slug": categoria_nombre.replace(" ", "-")}
+            id=categoria_nombre.replace(" ", "-"),
+            defaults={"nombre": categoria_nombre}
         )
 
-        # 4. Producto (evita duplicados)
-        producto, creado = Producto.objects.get_or_create(
-            nombre=nombre,
-            defaults={
-                "categoria": categoria,
-                "descripcion": descripcion,
-                "precio": precio,
-                "largo": largo,
-                "alto": alto,
-                "profundidad": profundidad,
-                "peso_kg": peso,
-                "stock": stock,
-            }
-        )
+        # =========================
+        # PRODUCTO (PK = ID)
+        # =========================
+        producto, creado = Producto.objects.update_or_create(
+    id=row["id"],
+    defaults={
+        "nombre": nombre,
+        "slug": row.get("slug", row["id"]),
+        "categoria": categoria,
+        "descripcion": descripcion,
+        "precio": precio,
+        "largo": largo,
+        "alto": alto,
+        "profundidad": profundidad,
+        "peso_kg": peso,
+        "stock": stock,
+    }
+)
 
         if creado:
             print(f"✅ Producto creado: {nombre}")
         else:
             print(f"⚠️ Producto ya existía: {nombre}")
 
-        # 5. Imágenes (columna: imagenes)
-        imagenes_raw = row.get("imagenes", "")
+        # =========================
+        # IMÁGENES
+        # =========================
+        imagenes_raw = row.get("imagenes") or row.get("imágenes")
 
         if isinstance(imagenes_raw, str) and imagenes_raw.strip():
-            urls = [url.strip() for url in imagenes_raw.split("|") if url.strip()]
+            urls = [u.strip() for u in imagenes_raw.split("|") if u.strip()]
 
-            # Evi
+            for url in urls:
+                ProductoImagen.objects.get_or_create(
+                    producto=producto,
+                    imagen_url=url
+                )
+
+    print("🎉 Carga finalizada sin errores")
